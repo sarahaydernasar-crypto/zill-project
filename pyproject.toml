@@ -1,0 +1,21 @@
+[project]
+name = "project"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Mariam12", email = "167231604+Maam1227@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "earthengine-api>=1.7.50",
+    "geemap>=0.37.2",
+    "geopandas>=1.2.0",
+]
+
+[project.scripts]
+project = "project:main"
+
+[build-system]
+requires = ["uv_build>=0.12.2,<0.13.0"]
+build-backend = "uv_build"
