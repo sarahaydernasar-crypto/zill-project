@@ -88,7 +88,12 @@ temperature_stats = ee.FeatureCollection(
 # print("Temperature statistics for all images:")
 # print(temperature_stats.getInfo())
 
-median_lst = lst_images.select("LST_C").median()
+lst_projection = lst_images.first().select("LST_C").projection()
+median_lst = (
+    lst_images.select("LST_C")
+    .median()
+    .setDefaultProjection(lst_projection)
+)
 
 median_stats = median_lst.reduceRegion(
     reducer=ee.Reducer.percentile([5, 50, 95]).combine(
@@ -104,7 +109,7 @@ median_stats = median_lst.reduceRegion(
 # print(median_stats.getInfo())
 
 heat_zones = (
-    lst_images.first().select("LST_C").multiply(0)
+    median_lst.select("LST_C").multiply(0)
     .where(median_lst.select("LST_C").gt(40), 1)
     .where(median_lst.select("LST_C").gt(50), 2)
     .updateMask(median_lst.select("LST_C").mask())
