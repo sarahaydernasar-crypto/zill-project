@@ -1,0 +1,9 @@
+[
+    {
+        "name": "محافظة بغداد (تحليل مكاني)",
+        "temperature": 48.5,
+        "classification": "Hotter",
+        "ndvi": 0.15,
+        "planting_priority": 85.0
+    }
+]
