@@ -1,7 +1,10 @@
 import json
+from pathlib import Path
 import bcrypt
 from project.database import engine, SessionLocal
 from project.models import Base, AreaDB, User
+
+RESULTS_FILE = Path(__file__).resolve().parents[1] / "baghdad_results.json"
 
 # إعادة إنشاء الجداول من الصفر لتجنب تعارض أنواع البيانات القديمة
 Base.metadata.drop_all(bind=engine)
@@ -11,7 +14,7 @@ def seed_all_data():
     db = SessionLocal()
     try:
         # 1. إدخال وتحديث البيانات المكانية
-        with open("baghdad_results.json", "r", encoding="utf-8") as f:
+        with open(RESULTS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
             
         for item in data:
@@ -20,7 +23,8 @@ def seed_all_data():
                 temperature=float(item["temperature"]),
                 classification=item["classification"],
                 ndvi=float(item["ndvi"]),
-                planting_priority=float(item["planting_priority"])
+                planting_priority=float(item["planting_priority"]),
+                geometry=json.dumps(item["geometry"]) if item.get("geometry") else None
             )
             db.add(area)
         print("✨ تم نقل وتحديث بيانات مناطق بغداد بنجاح!")

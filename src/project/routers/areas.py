@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import List
@@ -12,7 +13,7 @@ router = APIRouter(
 @router.get("/", response_model=List[dict])
 def get_all_spatial_areas(db: Session = Depends(get_db)):
     """
-    جلب كافة مناطق بغداد مع درجات الحرارة ومؤشرات التشجير 
+    جلب كافة مناطق بغداد مع درجات الحرارة ومؤشرات التشجير
     لتغذية واجهات تطبيق الموبايل والخريطة التفاعلية
     """
     areas = db.query(AreaDB).all()
@@ -27,6 +28,7 @@ def get_all_spatial_areas(db: Session = Depends(get_db)):
             "temperature": area.temperature,
             "classification": area.classification,
             "ndvi": area.ndvi,
-            "planting_priority": area.planting_priority
+            "planting_priority": area.planting_priority,
+            "geometry": json.loads(area.geometry) if area.geometry else None,
         })
     return result

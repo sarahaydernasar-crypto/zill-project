@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text
 from datetime import datetime
 from project.database import Base
 
@@ -12,6 +12,7 @@ class AreaDB(Base):
     classification = Column(String)
     ndvi = Column(Float)
     planting_priority = Column(Float)
+    geometry = Column(Text, nullable=True)  # حدود المنطقة بصيغة GeoJSON (نص) لعرضها على الخريطة
 
 # 2. جدول المستخدمين والأدمن
 class User(Base):
@@ -36,6 +37,7 @@ class UserReportDB(Base):
     __tablename__ = "user_reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    report_text = Column(String)
     username = Column(String)
+    area_name = Column(String)
+    report_text = Column(String)
     timestamp = Column(DateTime, default=datetime.utcnow)

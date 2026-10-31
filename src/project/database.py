@@ -1,13 +1,13 @@
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-# رابط اتصال سحابة Neon (يمكنك استبداله بالرابط المباشر أو جلبه من متغيرات البيئة Environment Variables)
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://neondb_owner:npg_cLC3AOamIfY6@ep-morning-paper-b5xyoaxp-pooler.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-)
+# رابط قاعدة البيانات يُقرأ من ملف .env (غير مرفوع على Git) أو من متغيرات البيئة
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL غير موجود. أنشئ ملف .env بالاعتماد على .env.example")
 
 # إنشاء محرك الاتصال بقاعدة بيانات PostgreSQL (Neon) مع إعدادات الأمان
 engine = create_engine(
@@ -18,6 +18,16 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
+def ensure_schema():
+    """يضيف الأعمدة الجديدة إلى الجداول الموجودة دون حذف أي بيانات."""
+    insp = inspect(engine)
+    if "areas" not in insp.get_table_names():
+        return
+    columns = {c["name"] for c in insp.get_columns("areas")}
+    if "geometry" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE areas ADD COLUMN geometry TEXT"))
 
 def get_db():
     db = SessionLocal()

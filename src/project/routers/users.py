@@ -17,9 +17,9 @@ class UserReportRequest(BaseModel):
 @router.post("/report", summary="Submit a User Feedback/Report")
 def submit_report(data: UserReportRequest, db: Session = Depends(get_db)):
     new_report = UserReportDB(
-        user_name=data.user_name,
+        username=data.user_name,
         area_name=data.area_name,
-        comment=data.comment
+        report_text=data.comment
     )
     db.add(new_report)
     db.commit()

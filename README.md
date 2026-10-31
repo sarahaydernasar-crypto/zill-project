@@ -32,9 +32,15 @@ The planting score is a preliminary suitability score, not a measured probabilit
 
 ## Run
 
-From the `Project` directory:
+From the `zill-project` directory:
 
 ```bash
 uv sync
-uv run python src/main.py
+cp .env.example .env                                   # then put the real DATABASE_URL in .env
+uv run python "src/project/data anlaysis/banlysis.py"  # 1. analysis -> baghdad_results.json (per district)
+uv run python src/ingest_data.py                       # 2. load results into the database
+uv run uvicorn project.main:app --reload               # 3. API on http://127.0.0.1:8000
 ```
+
+- Web interface: http://127.0.0.1:8000/app/
+- Flutter app: see `zill_app/README.md`

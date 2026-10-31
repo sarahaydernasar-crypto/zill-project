@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14532D">
+  <title>ظِلّ | خريطة حرارة المدينة والتشجير</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ===== الشريط العلوي ===== -->
+  <header class="topbar">
+    <a href="#home" class="brand" aria-label="ظِلّ - الصفحة الرئيسية">
+      <img src="assets/logo.svg" alt="" width="36" height="36">
+      <span>ظِلّ</span>
+    </a>
+    <nav class="nav" aria-label="التنقل الرئيسي">
+      <a href="#home" data-route="home">الرئيسية</a>
+      <a href="#map" data-route="map">الخريطة</a>
+      <a href="#recommendations" data-route="recommendations">توصيات التشجير</a>
+      <a href="#about" data-route="about">عن المشروع</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ===== 1. الصفحة الرئيسية ===== -->
+    <section id="page-home" class="page" data-page="home">
+      <div class="hero">
+        <div class="hero-text">
+          <img src="assets/logo.svg" alt="شعار ظِلّ" class="hero-logo" width="88" height="88">
+          <h1>ظِلّ</h1>
+          <p class="tagline">نفهم حرارة مدينتنا، ونزرع لمستقبل أبرد</p>
+          <a href="#map" class="btn btn-primary btn-lg">استكشف الخريطة</a>
+        </div>
+      </div>
+
+      <div class="container">
+        <div class="intro-grid">
+          <article class="card intro-card">
+            <div class="intro-icon" aria-hidden="true">🛰️</div>
+            <h3>نقيس الحرارة من الفضاء</h3>
+            <p>نحلل صور القمر الصناعي Landsat 9 لمعرفة درجة حرارة سطح الأرض في كل منطقة من المدينة.</p>
+          </article>
+          <article class="card intro-card">
+            <div class="intro-icon" aria-hidden="true">🗺️</div>
+            <h3>نحدد المناطق الأسخن</h3>
+            <p>نلوّن الخريطة حسب الحرارة، ونكشف المناطق التي تعاني من ضعف الغطاء النباتي.</p>
+          </article>
+          <article class="card intro-card">
+            <div class="intro-icon" aria-hidden="true">🌳</div>
+            <h3>نقترح أين نزرع</h3>
+            <p>نرتب المناطق حسب أولوية التشجير، مع مراعاة قرب المياه وقدرة التربة على حفظ الماء.</p>
+          </article>
+        </div>
+
+        <div class="card home-summary" id="home-summary" hidden>
+          <h3>نظرة سريعة على البيانات الحالية</h3>
+          <div class="stats-grid" id="home-stats"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 2. لوحة المعلومات والخريطة ===== -->
+    <section id="page-map" class="page" data-page="map" hidden>
+      <div class="dashboard">
+        <div class="stats-grid stats-compact" id="dash-stats"></div>
+
+        <div class="dash-body">
+          <div class="map-wrap card">
+            <div id="map" role="application" aria-label="خريطة حرارة المدينة"></div>
+
+            <div class="legend" aria-label="مفتاح الألوان">
+              <strong>درجة حرارة سطح الأرض</strong>
+              <ul id="legend-list"></ul>
+            </div>
+          </div>
+
+          <aside class="side card" id="side-panel">
+            <!-- 3. تفاصيل المنطقة -->
+            <div id="area-details" class="area-details" hidden></div>
+
+            <div id="area-list-wrap">
+              <h3 class="side-title">المناطق</h3>
+              <p class="muted small">اضغط على منطقة في الخريطة أو في القائمة لعرض تفاصيلها.</p>
+              <ul class="area-list" id="area-list"></ul>
+              <p class="muted small" id="no-geo-note" hidden></p>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 4. توصيات التشجير ===== -->
+    <section id="page-recommendations" class="page" data-page="recommendations" hidden>
+      <div class="container">
+        <header class="page-head">
+          <h2>توصيات التشجير</h2>
+          <p class="muted">المناطق مرتبة من الأعلى أولوية إلى الأقل، حسب درجة أولوية التشجير (0–100).</p>
+        </header>
+        <ol class="reco-list" id="reco-list"></ol>
+        <div class="card notice">
+          <strong>عن تقدير تأثير التشجير:</strong>
+          <span id="impact-note">لا نعرض حالياً رقماً لمقدار انخفاض الحرارة المتوقع، لأنه يحتاج إلى بيانات علمية ميدانية خاصة بالمدينة لم تتوفر بعد. سيظهر التقدير هنا عندما يضيفه فريق البيانات.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 5. عن المشروع ===== -->
+    <section id="page-about" class="page" data-page="about" hidden>
+      <div class="container narrow">
+        <header class="page-head">
+          <h2>عن مشروع ظِلّ</h2>
+        </header>
+
+        <article class="card about-block">
+          <h3>🔥 المشكلة</h3>
+          <p>تمتص الأسطح الإسمنتية والأسفلت ومناطق التربة المكشوفة أشعة الشمس، فتصبح المدن أسخن بكثير من محيطها. تسمى هذه الظاهرة «الجزر الحرارية الحضرية». وفي صيف بغداد قد تتجاوز حرارة سطح الأرض 50 درجة مئوية، وهذا يؤثر على صحة السكان ويزيد استهلاك الكهرباء.</p>
+        </article>
+
+        <article class="card about-block">
+          <h3>🎯 هدف ظِلّ</h3>
+          <p>نساعد المواطنين وموظفي البلدية على معرفة المناطق الأشد حرارة والأقل خضرة، ونقترح أين يكون للتشجير أكبر أثر، حتى يكون القرار مبنياً على بيانات.</p>
+        </article>
+
+        <article class="card about-block">
+          <h3>🛰️ مصادر البيانات</h3>
+          <ul class="sources">
+            <li><strong>Landsat 9 Collection 2 Level 2</strong> لحساب درجة حرارة سطح الأرض ومؤشر الغطاء النباتي NDVI (صيف 2026).</li>
+            <li><strong>Dynamic World</strong> لتصنيف استخدام الأرض واستبعاد المناطق المبنية.</li>
+            <li><strong>JRC Global Surface Water</strong> لقياس القرب من المياه السطحية.</li>
+            <li><strong>OpenLandMap</strong> لقدرة التربة على حفظ الماء.</li>
+            <li><strong>OpenStreetMap</strong> و<strong>Leaflet</strong> لعرض الخريطة.</li>
+          </ul>
+        </article>
+
+        <article class="card about-block">
+          <h3>🧮 طريقة التحليل</h3>
+          <ul class="sources">
+            <li>نحذف الغيوم وظلالها من الصور، ثم نأخذ وسيط (median) حرارة الصيف لكل نقطة.</li>
+            <li>نصنّف الحرارة إلى: أقل من 40°م، ومن 40 إلى 50°م، وأعلى من 50°م.</li>
+            <li>تكون المنطقة مرشحة للتشجير عندما تبلغ حرارتها 45°م أو أكثر ويكون NDVI فيها أقل من 0.2، بشرط ألا تكون منطقة مبنية.</li>
+            <li>درجة الأولوية (0–100) تجمع بين شدة الحرارة والقرب من المياه وقدرة التربة على حفظ الماء.</li>
+          </ul>
+          <p class="muted small">ملاحظة: درجة الأولوية مؤشر أولي للملاءمة، وليست احتمالاً مقاساً لنجاح الزراعة.</p>
+          <p><a class="btn btn-outline" id="analysis-map-link" href="#" target="_blank" rel="noopener">عرض خريطة التحليل التفصيلية</a></p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <!-- حالة التحميل والأخطاء -->
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- شريط تنقل سفلي للموبايل -->
+  <nav class="tabbar" aria-label="التنقل">
+    <a href="#home" data-route="home"><span aria-hidden="true">🏠</span>الرئيسية</a>
+    <a href="#map" data-route="map"><span aria-hidden="true">🗺️</span>الخريطة</a>
+    <a href="#recommendations" data-route="recommendations"><span aria-hidden="true">🌳</span>التوصيات</a>
+    <a href="#about" data-route="about"><span aria-hidden="true">ℹ️</span>عن ظِلّ</a>
+  </nav>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

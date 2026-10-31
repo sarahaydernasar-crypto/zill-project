@@ -309,24 +309,84 @@ boundary_export.start()
 #print("Export tasks started. Check the Earth Engine Tasks page for progress.")
 #print("Boundary and image search completed!")
 import json
+from pathlib import Path
 
-# تصدير النتائج وحمايتها بحيث تُحفظ تلقائياً حتى لو حدثت مشكلة في صلاحيات السحابة
-try:
-    mean_lst = float(median_stats.get("LST_C", 48.5)) if 'median_stats' in locals() else 48.5
-except Exception:
-    mean_lst = 48.5
+# ===== تصدير نتائج حقيقية لكل قضاء من أقضية بغداد =====
+# كل الأرقام تُحسب من الصور الفضائية؛ لا توجد قيم افتراضية.
+districts = ee.FeatureCollection("FAO/GAUL/2025/level2").filter(
+    ee.Filter.eq("GAUL1_NAME", "Baghdad")
+)
 
-final_output = [
-    {
-        "name": "محافظة بغداد (تحليل مكاني)",
-        "temperature": round(mean_lst, 1),
-        "classification": "Hotter" if mean_lst > 45 else "Moderate",
-        "ndvi": 0.15,
-        "planting_priority": 85.0
-    }
-]
+# أسماء الأقضية بالعربية (إن لم يوجد الاسم هنا يُستخدم الاسم الإنجليزي من GAUL)
+DISTRICT_NAMES_AR = {
+    "karkh": "الكرخ",
+    "rusafa": "الرصافة",
+    "resafa": "الرصافة",
+    "adhamiya": "الأعظمية",
+    "adhamiyah": "الأعظمية",
+    "kadhimiya": "الكاظمية",
+    "kadhimiyah": "الكاظمية",
+    "sadr": "مدينة الصدر",
+    "thawra": "مدينة الصدر",
+    "mahmudiya": "المحمودية",
+    "mahmoudiya": "المحمودية",
+    "abu ghraib": "أبو غريب",
+    "tarmiya": "الطارمية",
+    "taji": "التاجي",
+    "madain": "المدائن",
+    "mada'in": "المدائن",
+}
 
-with open("baghdad_results.json", "w", encoding="utf-8") as f:
+def arabic_name(name_en):
+    key = (name_en or "").lower()
+    for k, v in DISTRICT_NAMES_AR.items():
+        if k in key:
+            return v
+    return name_en
+
+def classify(temp):
+    # نفس عتبات heat_zones أعلاه
+    if temp > 50:
+        return "Hotter"
+    if temp > 40:
+        return "Moderate"
+    return "Cooler"
+
+stats_image = (
+    median_lst.select("LST_C").rename("temperature")
+    .addBands(median_ndvi.select("NDVI").rename("ndvi"))
+    .addBands(planting_priority.rename("planting_priority"))
+)
+
+district_stats = stats_image.reduceRegions(
+    collection=districts,
+    reducer=ee.Reducer.mean(),
+    scale=100,
+).map(lambda f: f.setGeometry(f.geometry().simplify(200)))
+
+final_output = []
+for feat in district_stats.getInfo()["features"]:
+    props = feat["properties"]
+    temp = props.get("temperature")
+    ndvi = props.get("ndvi")
+    if temp is None or ndvi is None:
+        print(f"⚠️ لا توجد بيانات كافية لـ {props.get('GAUL2_NAME')}، تم تجاوزه.")
+        continue
+    final_output.append({
+        "name": arabic_name(props.get("GAUL2_NAME")),
+        "temperature": round(temp, 1),
+        "classification": classify(temp),
+        "ndvi": round(ndvi, 3),
+        # متوسط درجة الأولوية للبكسلات المرشحة فقط (حارة + نبات ضعيف + غير مبنية)؛ 0 إن لم يوجد أي بكسل مرشح
+        "planting_priority": round(props.get("planting_priority") or 0, 1),
+        "geometry": feat["geometry"],
+    })
+
+if not final_output:
+    raise RuntimeError("لم يتم حساب أي قضاء. تحقق من اسم مجموعة GAUL والحقول GAUL1_NAME/GAUL2_NAME.")
+
+output_file = Path(__file__).resolve().parents[3] / "baghdad_results.json"
+with open(output_file, "w", encoding="utf-8") as f:
     json.dump(final_output, f, ensure_ascii=False, indent=4)
 
-print("✨ تم إنشاء وتصدير ملف baghdad_results.json بنجاح تام!")
+print(f"✨ تم تصدير {len(final_output)} قضاء إلى {output_file}")

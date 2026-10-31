@@ -1,7 +1,7 @@
 [project]
 name = "project"
 version = "0.1.0"
-description = "Add your description here"
+description = "Zill: Baghdad urban heat analysis and tree-planting priorities"
 readme = "README.md"
 authors = [
     { name = "Mariam12", email = "167231604+Maam1227@users.noreply.github.com" }
@@ -11,6 +11,12 @@ dependencies = [
     "earthengine-api>=1.7.50",
     "geemap>=0.37.2",
     "geopandas>=1.2.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "sqlalchemy>=2.0.0",
+    "bcrypt>=4.1.0",
+    "python-dotenv>=1.0.0",
+    "psycopg[binary]>=3.2",
 ]
 
 [project.scripts]
