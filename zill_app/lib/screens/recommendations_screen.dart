@@ -5,11 +5,14 @@ import '../services/areas_store.dart';
 import '../theme.dart';
 import '../widgets/area_details.dart';
 import '../widgets/common.dart';
+import '../widgets/site_widgets.dart';
+import '../widgets/tree_suggestions.dart';
 
 /// توصيات التشجير
 class RecommendationsScreen extends StatelessWidget {
-  const RecommendationsScreen({super.key, required this.onShowOnMap});
+  const RecommendationsScreen({super.key, required this.onShowOnMap, required this.onShowSite});
   final void Function(int areaId) onShowOnMap;
+  final void Function(int siteId) onShowSite;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +28,7 @@ class RecommendationsScreen extends StatelessWidget {
           children: [
             const Text('توصيات التشجير',
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: ZillColors.greenDark)),
-            const Text('المناطق مرتبة من الأعلى أولوية إلى الأقل، حسب درجة أولوية التشجير (0–100).',
+            const Text('الأقضية مرتبة من الأعلى أولوية إلى الأقل، والتصنيف نسبي بينها. تجمع الدرجة (0–100) شدة الحرارة مع قرب المياه وقدرة التربة على حفظ الماء، فهي تعبّر عن ملاءمة الزراعة أيضاً، لا عن شدة الحاجة وحدها. لذلك قد يأتي قضاء قليل الغطاء النباتي بأولوية أقل؛ وترتيب الأقل تشجيراً موجود في صفحة الخريطة.',
                 style: TextStyle(color: ZillColors.muted)),
             const SizedBox(height: 20),
             if (store.status == LoadStatus.error) ...[
@@ -49,7 +52,8 @@ class RecommendationsScreen extends StatelessWidget {
             for (var i = 0; i < recos.length; i++)
               Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: _RecoCard(rank: i + 1, area: recos[i], onShowOnMap: onShowOnMap),
+                child: _RecoCard(
+                    rank: i + 1, area: recos[i], onShowOnMap: onShowOnMap, onShowSite: onShowSite),
               ),
             Container(
               padding: const EdgeInsets.all(18),
@@ -73,10 +77,16 @@ class RecommendationsScreen extends StatelessWidget {
 }
 
 class _RecoCard extends StatelessWidget {
-  const _RecoCard({required this.rank, required this.area, required this.onShowOnMap});
+  const _RecoCard({
+    required this.rank,
+    required this.area,
+    required this.onShowOnMap,
+    required this.onShowSite,
+  });
   final int rank;
   final Area area;
   final void Function(int areaId) onShowOnMap;
+  final void Function(int siteId) onShowSite;
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +132,10 @@ class _RecoCard extends StatelessWidget {
             ]),
             const SizedBox(height: 10),
             ReasonsList(area.reasons),
+            const SizedBox(height: 12),
+            TreeSuggestions(area: area),
+            const SizedBox(height: 12),
+            SiteSuggestions(area: area, onTap: (s) => onShowSite(s.id)),
             if (area.impact != null) ...[
               const SizedBox(height: 6),
               Text.rich(TextSpan(children: [

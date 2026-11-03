@@ -5,22 +5,6 @@ import '../models/area.dart';
 import '../services/areas_store.dart';
 import '../theme.dart';
 
-/// شعار ظِلّ (شجرة داخل دائرة)
-class ZillLogo extends StatelessWidget {
-  const ZillLogo({super.key, this.size = 36});
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: const BoxDecoration(color: ZillColors.greenLight, shape: BoxShape.circle),
-      child: Icon(Icons.park_rounded, color: ZillColors.green, size: size * 0.62),
-    );
-  }
-}
-
 class StatCard extends StatelessWidget {
   const StatCard({
     super.key,
@@ -119,12 +103,15 @@ class PriorityBadge extends StatelessWidget {
 }
 
 /// مفتاح الألوان
-class HeatLegend extends StatelessWidget {
-  const HeatLegend({super.key});
+class CoverageLegend extends StatelessWidget {
+  const CoverageLegend({super.key});
 
   @override
   Widget build(BuildContext context) {
+    const stops = ZillColors.coverageStops;
+    final max = stops.last.$1;
     return Container(
+      width: 220,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.95),
@@ -135,27 +122,39 @@ class HeatLegend extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('درجة حرارة سطح الأرض',
+          const Text('الغطاء النباتي (NDVI)',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 4),
-          for (final l in HeatLevel.values)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  width: 18,
-                  height: 12,
-                  decoration:
-                      BoxDecoration(color: l.color, borderRadius: BorderRadius.circular(3)),
-                ),
-                const SizedBox(width: 8),
-                Text(l.label, style: const TextStyle(fontSize: 12)),
-                const SizedBox(width: 6),
-                Text(l.range,
-                    textDirection: TextDirection.ltr,
-                    style: const TextStyle(fontSize: 12, color: ZillColors.muted)),
-              ]),
+          const SizedBox(height: 6),
+          // من اليمين: الأقل غطاءً، إلى اليسار: الأكثر
+          Container(
+            height: 12,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              gradient: LinearGradient(
+                begin: Alignment.centerRight,
+                end: Alignment.centerLeft,
+                colors: [for (final s in stops) s.$2],
+                stops: [for (final s in stops) s.$1 / max],
+              ),
             ),
+          ),
+          const SizedBox(height: 4),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('قليل ${fmt(stops.first.$1, 0)}', style: const TextStyle(fontSize: 12)),
+            Text('كثيف ${fmt(max, 1)} فأكثر', style: const TextStyle(fontSize: 12)),
+          ]),
+          const SizedBox(height: 6),
+          const Row(children: [
+            Icon(Icons.place, size: 16, color: ZillColors.greenDark),
+            SizedBox(width: 4),
+            Text('موقع تشجير محتمل', style: TextStyle(fontSize: 12)),
+          ]),
+          const SizedBox(height: 2),
+          const Row(children: [
+            Icon(Icons.forest, size: 16, color: Color(0xFF1D4ED8)),
+            SizedBox(width: 4),
+            Text('حملة منفذة', style: TextStyle(fontSize: 12)),
+          ]),
         ],
       ),
     );

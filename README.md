@@ -44,3 +44,13 @@ uv run uvicorn project.main:app --reload               # 3. API on http://127.0.
 
 - Web interface: http://127.0.0.1:8000/app/
 - Flutter app: see `zill_app/README.md`
+
+## Admin and campaigns
+
+```bash
+uv run python src/set_admin_password.py   # create an admin or change a password (12+ characters)
+uv run python src/campaign_impact.py      # measure campaigns from satellite imagery (needs Earth Engine)
+```
+
+- `.env` needs `ADMIN_TOKEN_SECRET` (see `.env.example`).
+- Report and campaign photos are stored in `uploads/`, which is not in Git.

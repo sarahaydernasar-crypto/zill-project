@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../models/area.dart';
+import '../services/areas_store.dart';
 import '../theme.dart';
 import 'common.dart';
+import 'site_widgets.dart';
+import 'tree_suggestions.dart';
 
 /// شاشة/لوحة تفاصيل المنطقة
 class AreaDetails extends StatelessWidget {
@@ -28,6 +31,9 @@ class AreaDetails extends StatelessWidget {
           if (onClose != null)
             IconButton(onPressed: onClose, icon: const Icon(Icons.close), tooltip: 'إغلاق'),
         ]),
+        if (area.district != null)
+          Text('${area.level ?? 'منطقة'} في قضاء ${area.district}',
+              style: const TextStyle(color: ZillColors.muted)),
         const SizedBox(height: 8),
 
         // درجة الحرارة
@@ -70,6 +76,18 @@ class AreaDetails extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: ZillColors.greenDark)),
         const SizedBox(height: 6),
         ReasonsList(area.reasons),
+        const SizedBox(height: 16),
+        TreeSuggestions(area: area),
+        const SizedBox(height: 16),
+        SiteSuggestions(
+          area: area,
+          limit: 8,
+          onTap: (site) {
+            final store = AreasScope.of(context);
+            Navigator.of(context).maybePop();
+            store.selectSite(site.id);
+          },
+        ),
 
         if (area.impact != null) ...[
           const SizedBox(height: 16),

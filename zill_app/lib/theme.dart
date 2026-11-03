@@ -14,6 +14,16 @@ class ZillColors {
   static const heatCool = Color(0xFF38BDF8);
   static const noData = Color(0xFF9CA3AF);
 
+  /// تدرج الغطاء النباتي: (قيمة NDVI، اللون) من الأحمر الغامق إلى الأخضر
+  static const coverageStops = <(double, Color)>[
+    (0.0, Color(0xFF7F1D1D)),
+    (0.1, Color(0xFFDC2626)),
+    (0.2, Color(0xFFF97316)),
+    (0.3, Color(0xFFFACC15)),
+    (0.4, Color(0xFF84CC16)),
+    (0.6, Color(0xFF15803D)),
+  ];
+
   static const text = Color(0xFF1F2937);
   static const muted = Color(0xFF6B7280);
 }

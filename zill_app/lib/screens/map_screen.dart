@@ -4,12 +4,16 @@ import 'package:latlong2/latlong.dart';
 
 import '../config.dart';
 import '../models/area.dart';
+import '../models/planting_site.dart';
 import '../services/areas_store.dart';
+import '../services/community_store.dart';
+import 'campaigns_screen.dart' show showCampaignReport;
 import '../theme.dart';
 import '../widgets/area_details.dart';
 import '../widgets/common.dart';
+import '../widgets/site_widgets.dart';
 
-/// لوحة المعلومات والخريطة
+/// لوحة المعلومات والخريطة التفاعلية
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
@@ -22,13 +26,21 @@ class _MapScreenState extends State<MapScreen> {
 
   final _mapController = MapController();
   final LayerHitNotifier<int> _polygonHits = ValueNotifier(null);
-  final LayerHitNotifier<int> _circleHits = ValueNotifier(null);
 
   AreasStore? _store;
   bool _mapReady = false;
   bool _sheetOpen = false;
   int? _lastSelected;
   int _lastAreasHash = 0;
+  int? _hoveredId; // المنطقة تحت المؤشر (في الخريطة أو في القائمة)
+  int? _lastSelectedSite;
+  bool _showSites = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _polygonHits.addListener(_onPolygonHover);
+  }
 
   @override
   void didChangeDependencies() {
@@ -43,10 +55,20 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _store?.removeListener(_onStoreChanged);
+    _polygonHits.dispose();
     super.dispose();
   }
 
   bool get _isWide => MediaQuery.sizeOf(context).width >= _wideBreakpoint;
+
+  void _onPolygonHover() {
+    final hit = _polygonHits.value;
+    _setHovered(hit == null || hit.hitValues.isEmpty ? null : hit.hitValues.first);
+  }
+
+  void _setHovered(int? id) {
+    if (id != _hoveredId && mounted) setState(() => _hoveredId = id);
+  }
 
   void _onStoreChanged() {
     final store = _store!;
@@ -67,21 +89,28 @@ class _MapScreenState extends State<MapScreen> {
         }
       }
     }
+    if (store.selectedSiteId != _lastSelectedSite) {
+      _lastSelectedSite = store.selectedSiteId;
+      final site = store.selectedSite;
+      if (site != null) {
+        if (!_showSites) setState(() => _showSites = true);
+        _focusSite(site);
+        if (!_isWide) {
+          // ننتظر إغلاق نافذة التفاصيل إن كانت مفتوحة
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted && !_sheetOpen) _openSiteSheet(site);
+          });
+        }
+      }
+    }
   }
 
   // ---------- الكاميرا ----------
-  List<LatLng> _pointsOf(Area a) {
-    if (a.polygons.isNotEmpty) return a.polygons.expand((p) => p).toList();
-    if (a.point != null) return [a.point!];
-    if (_store!.areas.length == 1) return [AppConfig.cityCenter];
-    return [];
-  }
-
   void _fitAll() {
     if (!_mapReady) return;
-    final pts = _store!.areas.expand(_pointsOf).toList();
+    final pts = _store!.areas.expand((a) => a.polygons).expand((p) => p).toList();
     if (pts.length < 2) {
-      _mapController.move(pts.isEmpty ? AppConfig.cityCenter : pts.first, AppConfig.cityZoom);
+      _mapController.move(AppConfig.cityCenter, AppConfig.cityZoom);
       return;
     }
     _mapController.fitCamera(CameraFit.bounds(
@@ -91,19 +120,63 @@ class _MapScreenState extends State<MapScreen> {
     ));
   }
 
+  /// هامش الكاميرا؛ على الشاشات الكبيرة تغطي بطاقة التفاصيل الجهة اليسرى من الخريطة
+  EdgeInsets _focusPadding(double margin) =>
+      EdgeInsets.fromLTRB(_isWide ? 344 + margin : margin, margin, margin, margin);
+
   void _focus(Area a) {
     if (!_mapReady) return;
-    final pts = _pointsOf(a);
-    if (pts.isEmpty) return;
-    if (pts.length == 1) {
-      _mapController.move(pts.first, a.polygons.isEmpty && a.point == null ? AppConfig.cityZoom : 13);
-    } else {
-      _mapController.fitCamera(CameraFit.bounds(
-        bounds: LatLngBounds.fromPoints(pts),
-        padding: const EdgeInsets.all(40),
-        maxZoom: 14,
-      ));
+    final pts = a.polygons.expand((p) => p).toList();
+    if (pts.length < 2) return;
+    _mapController.fitCamera(CameraFit.bounds(
+      bounds: LatLngBounds.fromPoints(pts),
+      padding: _focusPadding(60),
+      maxZoom: 14,
+    ));
+  }
+
+  /// موضع اسم المنطقة: متوسط رؤوس أكبر مضلع فيها
+  LatLng _labelPoint(Area a) {
+    final ring = a.polygons.reduce((x, y) => x.length >= y.length ? x : y);
+    final lat = ring.map((p) => p.latitude).reduce((x, y) => x + y) / ring.length;
+    final lng = ring.map((p) => p.longitude).reduce((x, y) => x + y) / ring.length;
+    return LatLng(lat, lng);
+  }
+
+  void _focusSite(PlantingSite s) {
+    if (!_mapReady) return;
+    final pts = s.polygons.expand((p) => p).toList();
+    if (pts.length < 2) {
+      _mapController.move(s.point, 16);
+      return;
     }
+    _mapController.fitCamera(CameraFit.bounds(
+      bounds: LatLngBounds.fromPoints(pts),
+      padding: _focusPadding(120),
+      maxZoom: 17,
+    ));
+  }
+
+  Future<void> _openSiteSheet(PlantingSite site) async {
+    _sheetOpen = true;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: ZillColors.grayLight,
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+      builder: (_) => SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: SiteCard(site: site),
+      ),
+    );
+    _sheetOpen = false;
+    _store?.selectSite(null);
+  }
+
+  void _zoomBy(double delta) {
+    final camera = _mapController.camera;
+    _mapController.move(camera.center, camera.zoom + delta);
   }
 
   Future<void> _openSheet(Area area) async {
@@ -124,23 +197,72 @@ class _MapScreenState extends State<MapScreen> {
     _store?.select(null);
   }
 
-  void _handleHit(LayerHitNotifier<int> notifier) {
-    final hit = notifier.value;
-    if (hit == null || hit.hitValues.isEmpty) return;
-    final id = hit.hitValues.first;
+  void _selectAgain(int id) {
     // إعادة الضغط على نفس المنطقة تفتح التفاصيل مرة أخرى
     if (_store!.selectedId == id) _store!.select(null);
     _store!.select(id);
   }
 
+  void _handleTap() {
+    final hit = _polygonHits.value;
+    if (hit == null || hit.hitValues.isEmpty) return;
+    _selectAgain(hit.hitValues.first);
+  }
+
   // ---------- الواجهة ----------
+  Widget _buildSubAreaList(AreasStore store, Area open) {
+    final subs = store.subAreasOf(open);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton.icon(
+          onPressed: () {
+            store.closeDistrict();
+            _fitAll();
+          },
+          icon: const Icon(Icons.arrow_back, size: 18),
+          label: const Text('كل الأقضية'),
+          style: TextButton.styleFrom(foregroundColor: ZillColors.green),
+        ),
+        Text('مناطق ${open.name}',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: ZillColors.greenDark)),
+        const Text('مرتبة من الأقل غطاءً نباتياً إلى الأكثر، والأولوية نسبية بين مناطق هذا القضاء.',
+            style: TextStyle(fontSize: 13, color: ZillColors.muted)),
+        const SizedBox(height: 10),
+        if (subs.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(
+              child: Text('لا تتوفر مناطق داخلية لهذا القضاء بعد.',
+                  style: TextStyle(color: ZillColors.muted)),
+            ),
+          ),
+        for (final (i, a) in subs.indexed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: MouseRegion(
+              onEnter: (_) => _setHovered(a.id),
+              onExit: (_) => _setHovered(null),
+              child: _AreaRow(
+                rank: i + 1,
+                area: a,
+                showPriority: true,
+                highlighted: a.id == store.selectedId || a.id == _hoveredId,
+                onTap: () => _selectAgain(a.id),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = AreasScope.of(context);
 
     return LayoutBuilder(builder: (context, c) {
       final wide = c.maxWidth >= _wideBreakpoint;
-      final map = _buildMapCard(store);
+      final map = _buildMapCard(store, wide);
 
       if (wide) {
         return Padding(
@@ -155,9 +277,17 @@ class _MapScreenState extends State<MapScreen> {
             const SizedBox(height: 16),
             Expanded(
               child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Expanded(child: map),
+                SizedBox(
+                  width: 380,
+                  child: Card(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: _buildAreaList(store),
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 16),
-                SizedBox(width: 360, child: Card(child: _buildSidePanel(store))),
+                Expanded(child: map),
               ]),
             ),
           ]),
@@ -182,49 +312,135 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  Widget _buildMapCard(AreasStore store) {
-    final polygons = <Polygon<int>>[];
-    final circles = <CircleMarker<int>>[];
-    final single = store.areas.length == 1;
+  Widget _buildMapCard(AreasStore store, bool wide) {
+    final selected = store.selected;
+    final selectedSite = store.selectedSite;
+    final hovered = store.areaById(_hoveredId);
+    final visible = store.visibleAreas;
+    final hasShapes = visible.any((a) => a.polygons.isNotEmpty);
+    final open = store.drilled;
 
-    for (final a in store.areas) {
-      final selected = a.id == store.selectedId;
-      final fill = a.color.withValues(alpha: selected ? 0.6 : 0.45);
-      final border = selected ? ZillColors.greenDark : a.color;
-      final width = selected ? 4.0 : 2.0;
+    // المنطقة المختارة أو تحت المؤشر تُرسم أخيراً حتى تظهر حدودها كاملة
+    int rank(Area a) => a.id == store.selectedId ? 2 : (a.id == _hoveredId ? 1 : 0);
+    final ordered = [...visible]..sort((a, b) => rank(a).compareTo(rank(b)));
 
-      if (a.polygons.isNotEmpty) {
-        for (final ring in a.polygons) {
-          polygons.add(Polygon<int>(
-            points: ring,
-            color: fill,
-            borderColor: border,
-            borderStrokeWidth: width,
+    final polygons = <Polygon<int>>[
+      for (final a in ordered)
+        for (var i = 0; i < a.polygons.length; i++)
+          Polygon<int>(
+            points: a.polygons[i],
+            // عند فتح قضاء تخفت بقية الأقضية
+            color: a.coverageColor.withValues(alpha: switch (rank(a)) {
+              2 => 0.85,
+              1 => 0.75,
+              _ => open != null && a.district == null ? 0.2 : 0.6,
+            }),
+            borderColor: rank(a) > 0 ? ZillColors.text : Colors.white,
+            borderStrokeWidth: rank(a) > 0 ? 3 : 1.5,
             hitValue: a.id,
-          ));
-        }
-      } else if (a.point != null) {
-        circles.add(CircleMarker<int>(
-          point: a.point!,
-          radius: 14,
-          color: fill,
-          borderColor: border,
-          borderStrokeWidth: width,
-          hitValue: a.id,
-        ));
-      } else if (single) {
-        // منطقة واحدة بدون إحداثيات (مثل «محافظة بغداد») تُعرض على مركز المدينة
-        circles.add(CircleMarker<int>(
-          point: AppConfig.cityCenter,
-          radius: 18000,
-          useRadiusInMeter: true,
-          color: fill,
-          borderColor: border,
-          borderStrokeWidth: width,
-          hitValue: a.id,
-        ));
-      }
-    }
+          ),
+    ];
+
+    final campaignMarkers = <Marker>[
+      for (final c in CommunityScope.of(context).campaigns)
+        Marker(
+          point: c.point,
+          width: 34,
+          height: 34,
+          child: Tooltip(
+            message: c.name,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () => showCampaignReport(context, c),
+                child: const CircleAvatar(
+                  backgroundColor: Color(0xFF1D4ED8),
+                  child: Icon(Icons.forest, size: 20, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+        ),
+    ];
+
+    final shownSites = open == null ? store.sites : store.sitesIn(open);
+
+    final sitePolygons = <Polygon>[
+      // حدود القضاء المفتوح
+      if (open != null)
+        for (final ring in open.polygons)
+          Polygon(
+            points: ring,
+            color: Colors.transparent,
+            borderColor: ZillColors.greenDark,
+            borderStrokeWidth: 3,
+          ),
+      if (_showSites)
+        for (final s in shownSites)
+          for (final ring in s.polygons)
+            Polygon(
+              points: ring,
+              color: ZillColors.green.withValues(alpha: s.id == store.selectedSiteId ? 0.85 : 0.7),
+              borderColor: s.id == store.selectedSiteId ? ZillColors.text : ZillColors.greenDark,
+              borderStrokeWidth: s.id == store.selectedSiteId ? 3 : 1.5,
+            ),
+    ];
+
+    final siteMarkers = <Marker>[
+      if (_showSites)
+        for (final s in shownSites)
+          Marker(
+            point: s.point,
+            width: 30,
+            height: 30,
+            alignment: Alignment.topCenter,
+            child: Tooltip(
+              message: s.title,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () {
+                    if (store.selectedSiteId == s.id) store.selectSite(null);
+                    store.selectSite(s.id);
+                  },
+                  child: Icon(
+                    Icons.place,
+                    size: 30,
+                    color: s.id == store.selectedSiteId ? ZillColors.text : ZillColors.greenDark,
+                    shadows: const [Shadow(color: Colors.white, blurRadius: 4)],
+                  ),
+                ),
+              ),
+            ),
+          ),
+    ];
+
+    // الأسماء عناصر واجهة عادية حتى تأخذ الخط العربي من الثيم
+    final labels = <Marker>[
+      for (final a in visible)
+        // عند فتح قضاء نكتفي بأسماء مناطقه
+        if (a.polygons.isNotEmpty && (open == null || a.district != null))
+          Marker(
+            point: _labelPoint(a),
+            width: 130,
+            height: 26,
+            child: IgnorePointer(
+              child: Center(
+                child: Text(
+                  a.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                  ),
+                ),
+              ),
+            ),
+          ),
+    ];
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -234,6 +450,13 @@ class _MapScreenState extends State<MapScreen> {
           options: MapOptions(
             initialCenter: AppConfig.cityCenter,
             initialZoom: AppConfig.cityZoom,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+            ),
+            onTap: (_, _) {
+              store.select(null);
+              store.selectSite(null);
+            },
             onMapReady: () {
               _mapReady = true;
               _fitAll();
@@ -244,42 +467,104 @@ class _MapScreenState extends State<MapScreen> {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.zill.zill_app',
             ),
-            GestureDetector(
-              onTap: () => _handleHit(_polygonHits),
-              child: PolygonLayer<int>(polygons: polygons, hitNotifier: _polygonHits),
+            MouseRegion(
+              hitTestBehavior: HitTestBehavior.deferToChild,
+              cursor: SystemMouseCursors.click,
+              onExit: (_) => _setHovered(null),
+              child: GestureDetector(
+                onTap: _handleTap,
+                child: PolygonLayer<int>(polygons: polygons, hitNotifier: _polygonHits),
+              ),
             ),
-            GestureDetector(
-              onTap: () => _handleHit(_circleHits),
-              child: CircleLayer<int>(circles: circles, hitNotifier: _circleHits),
-            ),
+            PolygonLayer(polygons: sitePolygons),
+            MarkerLayer(markers: labels),
+            MarkerLayer(markers: siteMarkers),
+            MarkerLayer(markers: campaignMarkers),
             const SimpleAttributionWidget(source: Text('OpenStreetMap')),
           ],
         ),
-        const PositionedDirectional(start: 12, bottom: 12, child: HeatLegend()),
+
+        // أزرار التكبير والتصغير وإعادة الضبط
+        PositionedDirectional(
+          start: 12,
+          top: 12,
+          child: _MapControls(
+            onZoomIn: () => _zoomBy(1),
+            onZoomOut: () => _zoomBy(-1),
+            showSites: _showSites,
+            onToggleSites: () => setState(() => _showSites = !_showSites),
+            onReset: () {
+              store.closeDistrict();
+              _fitAll();
+            },
+          ),
+        ),
+
+        // بطاقة سريعة للمنطقة تحت المؤشر
+        if (hovered != null && hovered.id != store.selectedId)
+          PositionedDirectional(
+            start: 64,
+            top: 12,
+            child: IgnorePointer(child: _HoverCard(area: hovered)),
+          ),
+
+        const PositionedDirectional(start: 12, bottom: 34, child: CoverageLegend()),
+
+        // تفاصيل المنطقة المختارة فوق الخريطة، والقائمة تبقى ظاهرة بجانبها
+        if (wide && selected != null)
+          PositionedDirectional(
+            end: 12,
+            top: 12,
+            bottom: 34,
+            width: 320,
+            child: Material(
+              color: ZillColors.grayLight,
+              elevation: 4,
+              borderRadius: BorderRadius.circular(14),
+              clipBehavior: Clip.antiAlias,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                child: AreaDetails(area: selected, onClose: () => store.select(null)),
+              ),
+            ),
+          ),
+
+        if (wide && selectedSite != null)
+          PositionedDirectional(
+            end: 12,
+            top: 12,
+            bottom: 34,
+            width: 320,
+            child: Material(
+              color: ZillColors.grayLight,
+              elevation: 4,
+              borderRadius: BorderRadius.circular(14),
+              clipBehavior: Clip.antiAlias,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                child: SiteCard(site: selectedSite, onClose: () => store.selectSite(null)),
+              ),
+            ),
+          ),
+
+        if (store.status == LoadStatus.loaded && !hasShapes)
+          const Center(child: _NoShapesNotice()),
+
         if (store.status == LoadStatus.loading)
           const Positioned(top: 0, left: 0, right: 0, child: LinearProgressIndicator()),
       ]),
     );
   }
 
-  Widget _buildSidePanel(AreasStore store) {
-    final area = store.selected;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: area != null
-          ? AreaDetails(area: area, onClose: () => store.select(null))
-          : _buildAreaList(store),
-    );
-  }
-
   Widget _buildAreaList(AreasStore store) {
-    final noGeo = store.areas.length > 1 ? store.areas.where((a) => !a.hasLocation).length : 0;
+    final open = store.drilled;
+    if (open != null) return _buildSubAreaList(store, open);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('المناطق',
+        const Text('المناطق الأقل تشجيراً',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: ZillColors.greenDark)),
-        const Text('اضغط على منطقة في الخريطة أو في القائمة لعرض تفاصيلها.',
+        const Text('مرتبة من الأقل غطاءً نباتياً إلى الأكثر. اضغط على منطقة لعرض تفاصيلها.',
             style: TextStyle(fontSize: 13, color: ZillColors.muted)),
         const SizedBox(height: 10),
         if (store.areas.isEmpty)
@@ -296,36 +581,185 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
-        for (final a in store.byTemperature)
+        for (final (i, a) in store.byVegetation.indexed)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Material(
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                    color: a.id == store.selectedId ? ZillColors.green : Colors.transparent,
-                    width: 2),
-              ),
-              child: ListTile(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                leading: CircleAvatar(radius: 7, backgroundColor: a.color),
-                minLeadingWidth: 14,
-                title: Text(a.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                trailing: Text(deg(a.temperature),
-                    textDirection: TextDirection.ltr,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                onTap: () {
-                  if (store.selectedId == a.id) store.select(null);
-                  store.select(a.id);
-                },
+            child: MouseRegion(
+              onEnter: (_) => _setHovered(a.id),
+              onExit: (_) => _setHovered(null),
+              child: _AreaRow(
+                rank: i + 1,
+                area: a,
+                highlighted: a.id == store.selectedId || a.id == _hoveredId,
+                onTap: () => _selectAgain(a.id),
               ),
             ),
           ),
-        if (noGeo > 0)
-          Text('$noGeo منطقة لا تملك إحداثيات بعد، لذلك تظهر في القائمة فقط.',
-              style: const TextStyle(fontSize: 13, color: ZillColors.muted)),
       ],
+    );
+  }
+}
+
+/// صف منطقة في القائمة: الترتيب والاسم ودرجة الحرارة وNDVI، ومستوى الأولوية عند الحاجة
+class _AreaRow extends StatelessWidget {
+  const _AreaRow({
+    required this.rank,
+    required this.area,
+    required this.highlighted,
+    required this.onTap,
+    this.showPriority = false,
+  });
+
+  final bool showPriority;
+  final int rank;
+  final Area area;
+  final bool highlighted;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = area.coverageColor;
+    final onColor = color.computeLuminance() > 0.4 ? ZillColors.text : Colors.white;
+
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: highlighted ? ZillColors.green : Colors.transparent, width: 2),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(children: [
+            CircleAvatar(
+              radius: 15,
+              backgroundColor: color,
+              child: Text('$rank',
+                  style: TextStyle(color: onColor, fontWeight: FontWeight.w800, fontSize: 14)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(area.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                if (showPriority) ...[
+                  const SizedBox(height: 4),
+                  PriorityBadge(area.priorityLevel),
+                ],
+              ]),
+            ),
+            const SizedBox(width: 8),
+            _Metric(label: 'الحرارة', value: deg(area.temperature)),
+            const SizedBox(width: 12),
+            _Metric(label: 'NDVI', value: fmt(area.ndvi, 2)),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  const _Metric({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Text(value,
+          textDirection: TextDirection.ltr,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+      Text(label, style: const TextStyle(fontSize: 11, color: ZillColors.muted)),
+    ]);
+  }
+}
+
+class _MapControls extends StatelessWidget {
+  const _MapControls({
+    required this.onZoomIn,
+    required this.onZoomOut,
+    required this.onReset,
+    required this.showSites,
+    required this.onToggleSites,
+  });
+  final bool showSites;
+  final VoidCallback onToggleSites;
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      elevation: 2,
+      borderRadius: BorderRadius.circular(10),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(onPressed: onZoomIn, icon: const Icon(Icons.add), tooltip: 'تكبير'),
+        IconButton(onPressed: onZoomOut, icon: const Icon(Icons.remove), tooltip: 'تصغير'),
+        IconButton(onPressed: onReset, icon: const Icon(Icons.fit_screen), tooltip: 'عرض كل المناطق'),
+        IconButton(
+          onPressed: onToggleSites,
+          icon: Icon(showSites ? Icons.place : Icons.place_outlined,
+              color: showSites ? ZillColors.green : null),
+          tooltip: showSites ? 'إخفاء مواقع التشجير' : 'إظهار مواقع التشجير',
+        ),
+      ]),
+    );
+  }
+}
+
+class _HoverCard extends StatelessWidget {
+  const _HoverCard({required this.area});
+  final Area area;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      elevation: 3,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(area.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              _Metric(label: 'الحرارة', value: deg(area.temperature)),
+              const SizedBox(width: 16),
+              _Metric(label: 'NDVI', value: fmt(area.ndvi, 2)),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoShapesNotice extends StatelessWidget {
+  const _NoShapesNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      elevation: 3,
+      borderRadius: BorderRadius.circular(12),
+      child: const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text(
+          'حدود المناطق غير متوفرة بعد.\nستظهر ملوّنة على الخريطة بعد إدخال نتائج التحليل.',
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 }

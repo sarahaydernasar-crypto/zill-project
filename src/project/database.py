@@ -20,14 +20,31 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def ensure_schema():
-    """يضيف الأعمدة الجديدة إلى الجداول الموجودة دون حذف أي بيانات."""
+    """ينشئ الجداول الناقصة ويضيف الأعمدة الجديدة دون حذف أي بيانات."""
+    Base.metadata.create_all(bind=engine)
     insp = inspect(engine)
-    if "areas" not in insp.get_table_names():
-        return
-    columns = {c["name"] for c in insp.get_columns("areas")}
-    if "geometry" not in columns:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE areas ADD COLUMN geometry TEXT"))
+    new_columns = {
+        "areas": {
+            "geometry": "TEXT",
+            "built_up_ratio": "FLOAT",
+            "water_distance_m": "FLOAT",
+            "soil_water": "FLOAT",
+        },
+        "user_reports": {
+            "tracking_code": "VARCHAR",
+            "report_type": "VARCHAR",
+            "photo": "VARCHAR",
+            "status": "VARCHAR",
+            "admin_note": "VARCHAR",
+            "updated_at": "TIMESTAMP",
+        },
+    }
+    with engine.begin() as conn:
+        for table, columns in new_columns.items():
+            existing = {c["name"] for c in insp.get_columns(table)}
+            for name, sql_type in columns.items():
+                if name not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}"))
 
 def get_db():
     db = SessionLocal()

@@ -16,16 +16,6 @@ enum HeatLevel {
   final String label;
   final Color color;
 
-  String get range => switch (this) {
-        HeatLevel.extreme => '> ${deg(AppConfig.extremeTemp, 0)}',
-        HeatLevel.hot => _range(AppConfig.hotTemp, AppConfig.extremeTemp),
-        HeatLevel.warm => _range(AppConfig.warmTemp, AppConfig.hotTemp),
-        HeatLevel.cool => '< ${deg(AppConfig.warmTemp, 0)}',
-      };
-
-  static String _range(double from, double to) =>
-      '${from.toInt()}–${to.toInt()}°';
-
   static HeatLevel? of(double? t) {
     if (t == null) return null;
     if (t > AppConfig.extremeTemp) return HeatLevel.extreme;
@@ -36,9 +26,9 @@ enum HeatLevel {
 }
 
 enum PriorityLevel {
-  high('أولوية عالية', Color(0xFFFEE2E2), Color(0xFFB91C1C)),
+  high('أعلى أولوية', Color(0xFFFEE2E2), Color(0xFFB91C1C)),
   medium('أولوية متوسطة', Color(0xFFFFEDD5), Color(0xFFC2410C)),
-  low('أولوية منخفضة', ZillColors.greenLight, ZillColors.greenDark),
+  low('أقل أولوية', ZillColors.greenLight, ZillColors.greenDark),
   none('غير مرشحة', Color(0xFFE5E7EB), ZillColors.muted);
 
   const PriorityLevel(this.label, this.background, this.foreground);
@@ -58,6 +48,11 @@ class Area {
     this.priority,
     this.reason,
     this.impact,
+    this.district,
+    this.level,
+    this.builtUpRatio,
+    this.waterDistanceM,
+    this.soilWater,
     this.polygons = const [],
     this.point,
   });
@@ -70,8 +65,33 @@ class Area {
   final double? priority;
   final String? reason; // سبب جاهز إن أرسله الـ Backend
   final String? impact; // تقدير تأثير التشجير إن توفر علمياً
+  final String? district; // القضاء الذي تتبعه المنطقة؛ فارغ للأقضية نفسها
+  final String? level; // حي أو ناحية
+  final double? builtUpRatio; // نسبة المساحة المبنية (0-1)
+  final double? waterDistanceM; // متوسط البعد عن المياه بالمتر
+  final double? soilWater; // قدرة التربة على حفظ الماء (0-1)
+  /// مستوى الأولوية نسبةً إلى بقية المناطق؛ يحدده assignRelativePriority
+  PriorityLevel priorityLevel = PriorityLevel.none;
   final List<List<LatLng>> polygons; // حدود المنطقة (من GeoJSON)
   final LatLng? point; // أو نقطة واحدة
+
+  bool get hasSiteData => builtUpRatio != null && waterDistanceM != null && soilWater != null;
+
+  /// هل تقع النقطة داخل حدود المنطقة؟ (طريقة تقاطع الشعاع)
+  bool contains(LatLng p) => polygons.any((ring) {
+        var inside = false;
+        for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          final a = ring[i], b = ring[j];
+          if ((a.latitude > p.latitude) != (b.latitude > p.latitude) &&
+              p.longitude <
+                  (b.longitude - a.longitude) * (p.latitude - a.latitude) /
+                          (b.latitude - a.latitude) +
+                      a.longitude) {
+            inside = !inside;
+          }
+        }
+        return inside;
+      });
 
   bool get hasLocation => polygons.isNotEmpty || point != null;
 
@@ -87,13 +107,19 @@ class Area {
       priority: _num(j['planting_priority']),
       reason: j['reason'] as String?,
       impact: (j['cooling_estimate'] ?? j['impact']) as String?,
-      polygons: _parseGeometry(j['geometry']),
+      district: j['district'] as String?,
+      level: j['level'] as String?,
+      builtUpRatio: _num(j['built_up_ratio']),
+      waterDistanceM: _num(j['water_distance_m']),
+      soilWater: _num(j['soil_water']),
+      polygons: parseGeometry(j['geometry']),
       point: (lat != null && lng != null) ? LatLng(lat, lng) : null,
     );
   }
 
   HeatLevel? get heatLevel => HeatLevel.of(temperature);
   Color get color => heatLevel?.color ?? ZillColors.noData;
+  Color get coverageColor => coverageColorOf(ndvi);
 
   static const _classAr = {
     'hotter': 'مرتفعة الحرارة',
@@ -125,14 +151,6 @@ class Area {
 
   bool get needsPlanting => (priority ?? 0) > 0 || isCandidate;
 
-  PriorityLevel get priorityLevel {
-    final p = priority;
-    if (p == null || p <= 0) return PriorityLevel.none;
-    if (p >= 70) return PriorityLevel.high;
-    if (p >= 40) return PriorityLevel.medium;
-    return PriorityLevel.low;
-  }
-
   /// سبب اختيار المنطقة — مبني من أرقام المنطقة نفسها ومعايير التحليل
   List<String> get reasons {
     final r = <String>[];
@@ -162,9 +180,9 @@ class Area {
   }
 
   /// يدعم GeoJSON من نوع Polygon و MultiPolygon و Feature
-  static List<List<LatLng>> _parseGeometry(dynamic g) {
+  static List<List<LatLng>> parseGeometry(dynamic g) {
     if (g is! Map) return const [];
-    if (g['type'] == 'Feature') return _parseGeometry(g['geometry']);
+    if (g['type'] == 'Feature') return parseGeometry(g['geometry']);
     List<LatLng> ring(List coords) => coords
         .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
         .toList();
@@ -177,11 +195,41 @@ class Area {
               .map((poly) => ring((poly as List).first as List))
               .toList();
         case 'GeometryCollection':
-          return (g['geometries'] as List).expand((x) => _parseGeometry(x)).toList();
+          return (g['geometries'] as List).expand((x) => parseGeometry(x)).toList();
       }
     } catch (_) {}
     return const [];
   }
+}
+
+/// يقسم المناطق المرشحة حسب درجة الأولوية: نحو الثلث الأعلى، ثم الوسط، ثم نحو الثلث الأدنى.
+/// الدرجات المطلقة لا تكفي للتصنيف لأنها متوسطات تعتمد أيضاً على المياه والتربة.
+void assignRelativePriority(List<Area> areas) {
+  final ranked = areas.where((a) => (a.priority ?? 0) > 0).toList()
+    ..sort((a, b) => b.priority!.compareTo(a.priority!));
+  final edge = (ranked.length * 0.3).round();
+  for (final a in areas) {
+    a.priorityLevel = PriorityLevel.none;
+  }
+  for (final (i, a) in ranked.indexed) {
+    a.priorityLevel = i < edge
+        ? PriorityLevel.high
+        : (i >= ranked.length - edge ? PriorityLevel.low : PriorityLevel.medium);
+  }
+}
+
+/// لون الغطاء النباتي لقيمة NDVI، بتدرج مستمر بين ألوان ZillColors.coverageStops
+Color coverageColorOf(double? ndvi) {
+  if (ndvi == null) return ZillColors.noData;
+  const stops = ZillColors.coverageStops;
+  if (ndvi <= stops.first.$1) return stops.first.$2;
+  for (var i = 1; i < stops.length; i++) {
+    if (ndvi <= stops[i].$1) {
+      final t = (ndvi - stops[i - 1].$1) / (stops[i].$1 - stops[i - 1].$1);
+      return Color.lerp(stops[i - 1].$2, stops[i].$2, t)!;
+    }
+  }
+  return stops.last.$2;
 }
 
 /// تنسيق الأرقام بأرقام لاتينية

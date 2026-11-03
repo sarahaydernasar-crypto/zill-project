@@ -1,22 +1,37 @@
 import json
 from pathlib import Path
-import bcrypt
-from project.database import engine, SessionLocal
-from project.models import Base, AreaDB, User
+from project.database import engine, SessionLocal, ensure_schema
+from project.models import Base, AreaDB, PlantingSiteDB, SubAreaDB
 
 RESULTS_FILE = Path(__file__).resolve().parents[1] / "baghdad_results.json"
+SITES_FILE = Path(__file__).resolve().parents[1] / "baghdad_sites.json"
+SUB_AREAS_FILE = Path(__file__).resolve().parents[1] / "baghdad_sub_areas.json"
 
-# إعادة إنشاء الجداول من الصفر لتجنب تعارض أنواع البيانات القديمة
-Base.metadata.drop_all(bind=engine)
+# إنشاء الجداول الناقصة فقط؛ لا يُحذف أي جدول موجود
 Base.metadata.create_all(bind=engine)
+ensure_schema()
 
-def seed_all_data():
+def seed_areas():
+    with open(RESULTS_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    sites = None
+    if SITES_FILE.exists():
+        with open(SITES_FILE, "r", encoding="utf-8") as f:
+            sites = json.load(f)
+
+    sub_areas = None
+    if SUB_AREAS_FILE.exists():
+        with open(SUB_AREAS_FILE, "r", encoding="utf-8") as f:
+            sub_areas = json.load(f)
+
+    if not data:
+        raise ValueError("ملف النتائج فارغ، لم يتم تغيير قاعدة البيانات.")
+
     db = SessionLocal()
     try:
-        # 1. إدخال وتحديث البيانات المكانية
-        with open(RESULTS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            
+        # استبدال جداول المناطق والمواقع فقط، في عملية واحدة: إما تنجح كلها أو لا يتغير شيء.
+        # جداول المستخدمين والبلاغات والسجلات لا تُلمس.
+        db.query(AreaDB).delete()
         for item in data:
             area = AreaDB(
                 name=item["name"],
@@ -24,41 +39,29 @@ def seed_all_data():
                 classification=item["classification"],
                 ndvi=float(item["ndvi"]),
                 planting_priority=float(item["planting_priority"]),
+                built_up_ratio=item.get("built_up_ratio"),
+                water_distance_m=item.get("water_distance_m"),
+                soil_water=item.get("soil_water"),
                 geometry=json.dumps(item["geometry"]) if item.get("geometry") else None
             )
             db.add(area)
-        print("✨ تم نقل وتحديث بيانات مناطق بغداد بنجاح!")
-
-        # 2. إضافة وتثبيت حسابات الأدمن في قاعدة البيانات
-        admins_data = [
-            {"username": "admin1", "password": "123"},
-            {"username": "admin2", "password": "456"}
-        ]
-        
-        for data_admin in admins_data:
-            existing_user = db.query(User).filter(User.username == data_admin["username"]).first()
-            if not existing_user:
-                pwd_bytes = data_admin["password"].encode('utf-8')
-                hashed_pw = bcrypt.hashpw(pwd_bytes, bcrypt.gensalt()).decode('utf-8')
-                
-                new_admin = User(
-                    username=data_admin["username"],
-                    hashed_password=hashed_pw,
-                    is_admin=True
-                )
-                db.add(new_admin)
-                print(f"👤 تم تثبيت الأدمن: {data_admin['username']}")
-            else:
-                print(f"ℹ️ الأدمن {data_admin['username']} موجود مسبقاً.")
-
+        if sites is not None:
+            db.query(PlantingSiteDB).delete()
+            for item in sites:
+                fields = {k: v for k, v in item.items() if k != "geometry"}
+                db.add(PlantingSiteDB(**fields, geometry=json.dumps(item["geometry"])))
+        if sub_areas is not None:
+            db.query(SubAreaDB).delete()
+            for item in sub_areas:
+                fields = {k: v for k, v in item.items() if k != "geometry"}
+                db.add(SubAreaDB(**fields, geometry=json.dumps(item["geometry"])))
         db.commit()
-        print("🚀 تم اكتمال إدخال البيانات وتثبيت حسابات الأدمن بنجاح تام!")
-
-    except Exception as e:
+        print(f"✨ تم تحديث {len(data)} قضاء و{len(sub_areas or [])} منطقة و{len(sites or [])} موقع تشجير بنجاح!")
+    except Exception:
         db.rollback()
-        print(f"❌ حدث خطأ: {e}")
+        raise
     finally:
         db.close()
 
 if __name__ == "__main__":
-    seed_all_data()
+    seed_areas()

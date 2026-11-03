@@ -17,6 +17,8 @@ class AppConfig {
   }
 
   static const String areasEndpoint = '/api/areas/';
+  static const String subAreasEndpoint = '/api/areas/sub-areas';
+  static const String sitesEndpoint = '/api/sites/';
   static const String analysisMapPath = '/map';
 
   /// مركز بغداد كما في سكربت التحليل
