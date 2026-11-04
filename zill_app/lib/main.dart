@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'screens/about_screen.dart';
 import 'screens/campaigns_screen.dart';
+import 'screens/green_points_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/map_screen.dart';
 import 'screens/recommendations_screen.dart';
@@ -142,6 +143,19 @@ class _ZillShellState extends State<ZillShell> {
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(title: const Text('النقاط الخضراء')),
+                  body: const GreenPointsScreen(),
+                ),
+              ),
+            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            icon: const Icon(Icons.eco),
+            label: const Text('النقاط الخضراء'),
+          ),
           IconButton(
             tooltip: 'تحديث البيانات',
             onPressed: () {

@@ -5,6 +5,7 @@ import 'package:zill_app/theme.dart';
 import 'package:zill_app/models/area.dart';
 import 'package:zill_app/models/assistant.dart';
 import 'package:zill_app/models/campaign.dart';
+import 'package:zill_app/models/green_points.dart';
 import 'package:zill_app/models/impact.dart';
 import 'package:zill_app/models/planting_site.dart';
 import 'package:zill_app/models/trees.dart';
@@ -241,5 +242,13 @@ void main() {
         Area(id: 3, name: 'ج', ndvi: 0.05),
       ];
     expect(store.byVegetation.map((a) => a.id), [3, 1, 2]);
+  });
+
+  test('النقاط الخضراء: نقطتان لكل 3 أشجار كاملة، و50 نقطة تحتاج 75 شجرة', () {
+    expect(GreenPoints.forTrees(2), 0);
+    expect(GreenPoints.forTrees(3), 2);
+    expect(GreenPoints.forTrees(7), 4);
+    expect(GreenPoints.treesToRedeem, 75);
+    expect(GreenPoints.forTrees(GreenPoints.treesToRedeem), GreenPoints.redeemPoints);
   });
 }
