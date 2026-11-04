@@ -17,13 +17,18 @@ class LoginRequest(BaseModel):
     password: str
 
 
+def _password_matches(password: str, stored: str | None) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), (stored or "").encode("utf-8"))
+    except ValueError:
+        # القيمة المحفوظة ليست تشفير bcrypt (حساب قديم بنص مكشوف): لا يُقبل حتى تُغيَّر كلمة مروره
+        return False
+
+
 @router.post("/login")
 def login(data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == data.username).first()
-    valid = user is not None and user.is_admin and bcrypt.checkpw(
-        data.password.encode("utf-8"), user.hashed_password.encode("utf-8")
-    )
-    if not valid:
+    if user is None or not user.is_admin or not _password_matches(data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="اسم المستخدم أو كلمة المرور غير صحيحة")
     # كلمات المرور القصيرة القديمة لا تُقبل حتى يغيّرها set_admin_password.py
     if len(data.password) < MIN_PASSWORD_LENGTH:
