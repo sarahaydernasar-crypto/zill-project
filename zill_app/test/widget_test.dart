@@ -245,10 +245,45 @@ void main() {
   });
 
   test('النقاط الخضراء: نقطتان لكل 3 أشجار كاملة، و50 نقطة تحتاج 75 شجرة', () {
-    expect(GreenPoints.forTrees(2), 0);
-    expect(GreenPoints.forTrees(3), 2);
-    expect(GreenPoints.forTrees(7), 4);
-    expect(GreenPoints.treesToRedeem, 75);
-    expect(GreenPoints.forTrees(GreenPoints.treesToRedeem), GreenPoints.redeemPoints);
+    final rules = GreenRules.fromJson({
+      'trees_per_reward': 3,
+      'points_per_reward': 2,
+      'campaign_points': 5,
+      'survival_points': 3,
+      'update_points': 1,
+      'update_interval_days': 30,
+      'report_points': 1,
+      'redeem_points': 50,
+    });
+    expect(rules.treesToRedeem, 75);
+    expect(rules.earnWays.first.points, 2);
+    expect(rules.earnWays.length, 5);
+  });
+
+  test('صياغة النقاط بالعربية', () {
+    expect(pointsLabel(1), 'نقطة');
+    expect(pointsLabel(2), 'نقطتان');
+    expect(pointsLabel(5), '5 نقاط');
+    expect(pointsLabel(50), '50 نقطة');
+    expect(pointsLabel(0), '0 نقطة');
+  });
+
+  test('الشجرة تُقرأ من الـ API، والعامة بلا بيانات مراجعة', () {
+    final t = RegisteredTree.fromJson({
+      'id': 1,
+      'name': 'نخلة',
+      'lat': 33.3,
+      'lng': 44.4,
+      'planted_on': '2026-01-10',
+      'status': 'needs_care',
+      'contributor': 'فريق الكرخ',
+      'updates': [
+        {'status': 'healthy', 'created_at': '2026-03-01T10:00:00', 'note': 'نمت'}
+      ],
+    });
+    expect(t.point.latitude, 33.3);
+    expect(t.statusLabel, 'تحتاج إلى عناية');
+    expect(t.reviewStatus, isNull);
+    expect(t.updates.single.date, '2026-03-01');
   });
 }

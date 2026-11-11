@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../services/areas_store.dart';
 import '../services/community_store.dart';
+import '../services/green_store.dart';
 import '../theme.dart';
 
 const reportTypes = {
@@ -39,7 +40,7 @@ class ReportsScreen extends StatelessWidget {
           children: [
             const Text('شارك في تحسين بيئة مدينتك',
                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: ZillColors.greenDark)),
-            const Text('أرسل بلاغاً دون إنشاء حساب، وتابع حالته برمز خاص.',
+            const Text('أرسل بلاغاً دون إنشاء حساب، وتابع حالته برمز خاص. وإذا سجلت الدخول من صفحة النقاط الخضراء تُحسب لك نقاطه.',
                 style: TextStyle(color: ZillColors.muted)),
             const SizedBox(height: 20),
             const _ReportForm(),
@@ -94,6 +95,7 @@ class _ReportFormState extends State<_ReportForm> {
         area: place.isEmpty ? _district! : '$_district - $place',
         description: _description.text.trim(),
         photo: _photo,
+        userToken: GreenScope.of(context).token,
       );
       setState(() {
         _code = code;

@@ -1,0 +1,9 @@
+# ما يحتاجه الخادم فقط، دون مكتبات التحليل الثقيلة (Earth Engine وgeemap وgeopandas)
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+sqlalchemy>=2.0.0
+bcrypt>=4.1.0
+python-dotenv>=1.0.0
+psycopg[binary]>=3.2
+pyjwt>=2.15.1
+python-multipart>=0.0.33

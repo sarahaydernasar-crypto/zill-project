@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: zill
+    runtime: python
+    plan: free
+    branch: flutter-frontend
+    buildCommand: pip install -r requirements-server.txt
+    startCommand: PYTHONPATH=src uvicorn project.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    healthCheckPath: /api/points/rules
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DATABASE_URL
+        sync: false # يُكتب في لوحة Render، ولا يوضع في الكود أبداً
+      - key: ADMIN_TOKEN_SECRET
+        generateValue: true

@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from project.auth import require_admin
 from project.database import get_db
-from project.models import CampaignDB
+from project.models import CampaignDB, User
+from project.points import CAMPAIGN_POINTS, award
 from project.uploads import save_photo
 
 router = APIRouter(prefix="/api/campaigns", tags=["Planting Campaigns"])
@@ -117,6 +118,27 @@ async def upload_photo(
     _: str = Depends(require_admin),
 ):
     campaign = _get_or_404(db, campaign_id)
-    setattr(campaign, f"photo_{kind}", await save_photo(photo))
+    setattr(campaign, f"photo_{kind}", await save_photo(photo, db))
     db.commit()
     return _to_dict(campaign)
+
+
+class Participant(BaseModel):
+    username: str = Field(min_length=1, max_length=30)
+
+
+@router.post("/{campaign_id}/participants")
+def add_participant(
+    campaign_id: int,
+    data: Participant,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_admin),
+):
+    """يمنح مشارك الحملة نقاطه مرة واحدة لكل حملة."""
+    campaign = _get_or_404(db, campaign_id)
+    user = db.query(User).filter(User.username == data.username.strip(), User.is_admin.is_(False)).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="لا يوجد مستخدم بهذا الاسم")
+    award(db, user.id, CAMPAIGN_POINTS, f"المشاركة في حملة {campaign.name}", f"campaign:{campaign.id}:{user.id}")
+    db.commit()
+    return {"username": user.username}

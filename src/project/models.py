@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, Date, DateTime, Text
+from sqlalchemy import Column, ForeignKey, Integer, String, Float, Boolean, Date, DateTime, LargeBinary, Text
 from datetime import datetime
 from project.database import Base
 
@@ -116,3 +116,66 @@ class CampaignDB(Base):
     ref_temp_before = Column(Float, nullable=True)
     ref_temp_after = Column(Float, nullable=True)
     measured_at = Column(DateTime, nullable=True)
+
+# صور البلاغات والحملات والأشجار
+class PhotoDB(Base):
+    __tablename__ = "photos"
+
+    name = Column(String, primary_key=True)
+    media_type = Column(String)
+    data = Column(LargeBinary)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# 6. الأشجار التي يسجلها المستخدمون، وتظهر على الخريطة بعد اعتماد المشرف
+class TreeDB(Base):
+    __tablename__ = "trees"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    name = Column(String)
+    lat = Column(Float)
+    lng = Column(Float)
+    planted_on = Column(Date)
+    status = Column(String, default="healthy")  # healthy أو needs_care أو dead
+    contributor = Column(String)  # الشخص أو الفريق المساهم
+    photo = Column(String)
+    review_status = Column(String, default="pending", index=True)  # pending أو approved أو rejected
+    admin_note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# 7. سجل متابعة نمو الشجرة
+class TreeUpdateDB(Base):
+    __tablename__ = "tree_updates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tree_id = Column(Integer, ForeignKey("trees.id"), index=True)
+    status = Column(String)
+    note = Column(String, nullable=True)
+    photo = Column(String)
+    review_status = Column(String, default="pending", index=True)
+    admin_note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# 8. حركات النقاط: الرصيد مجموعها، والمصدر الفريد يمنع منح النقاط مرتين عن الشيء نفسه
+class PointEntryDB(Base):
+    __tablename__ = "point_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    points = Column(Integer)
+    reason = Column(String)
+    source = Column(String, unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# 9. طلبات استبدال النقاط، وينفذها المشرف يدوياً
+class RedemptionDB(Base):
+    __tablename__ = "redemptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    reward = Column(String)  # phone_credit أو store_discount
+    points = Column(Integer)
+    phone = Column(String)
+    status = Column(String, default="pending", index=True)  # pending أو completed أو rejected
+    admin_note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

@@ -7,11 +7,13 @@ import '../models/area.dart';
 import '../models/planting_site.dart';
 import '../services/areas_store.dart';
 import '../services/community_store.dart';
+import '../services/green_store.dart';
 import 'campaigns_screen.dart' show showCampaignReport;
 import '../theme.dart';
 import '../widgets/area_details.dart';
 import '../widgets/common.dart';
 import '../widgets/site_widgets.dart';
+import '../widgets/tree_widgets.dart';
 
 /// لوحة المعلومات والخريطة التفاعلية
 class MapScreen extends StatefulWidget {
@@ -363,6 +365,28 @@ class _MapScreenState extends State<MapScreen> {
         ),
     ];
 
+    final treeMarkers = <Marker>[
+      for (final t in GreenScope.of(context).trees)
+        Marker(
+          point: t.point,
+          width: 28,
+          height: 28,
+          child: Tooltip(
+            message: t.name,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () => showTreeDetails(context, t),
+                child: CircleAvatar(
+                  backgroundColor: treeStatusColor(t.status),
+                  child: const Icon(Icons.park, size: 17, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+        ),
+    ];
+
     final shownSites = open == null ? store.sites : store.sitesIn(open);
 
     final sitePolygons = <Polygon>[
@@ -480,6 +504,7 @@ class _MapScreenState extends State<MapScreen> {
             MarkerLayer(markers: labels),
             MarkerLayer(markers: siteMarkers),
             MarkerLayer(markers: campaignMarkers),
+            MarkerLayer(markers: treeMarkers),
             const SimpleAttributionWidget(source: Text('OpenStreetMap')),
           ],
         ),

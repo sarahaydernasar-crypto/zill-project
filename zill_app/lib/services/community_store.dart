@@ -90,10 +90,12 @@ class CommunityStore extends ChangeNotifier {
     required String area,
     required String description,
     PickedPhoto? photo,
+    String? userToken,
   }) =>
       _guard(() async {
         final request = http.MultipartRequest('POST', _uri('/api/reports/'))
           ..fields.addAll({'report_type': type, 'area_name': area, 'description': description});
+        if (userToken != null) request.headers['Authorization'] = 'Bearer $userToken';
         if (photo != null) {
           request.files.add(http.MultipartFile.fromBytes('photo', photo.bytes, filename: photo.name));
         }
@@ -113,6 +115,28 @@ class CommunityStore extends ChangeNotifier {
 
   Future<void> updateReport(int id, String status, String? note) =>
       _json('PATCH', '/api/reports/$id', {'status': status, 'admin_note': note});
+
+  // ---------- مراجعة الأشجار والنقاط ----------
+  Future<Map<String, dynamic>> pendingReviews() => _guard(() async {
+        return Map<String, dynamic>.from(_decode(await _client.get(_uri('/api/trees/pending'), headers: _auth)) as Map);
+      });
+
+  Future<void> reviewTree(int id, String decision, String? note) =>
+      _json('PATCH', '/api/trees/$id/review', {'decision': decision, 'admin_note': note});
+
+  Future<void> reviewUpdate(int id, String decision, String? note) =>
+      _json('PATCH', '/api/trees/updates/$id/review', {'decision': decision, 'admin_note': note});
+
+  Future<List<Map<String, dynamic>>> listRedemptions() => _guard(() async {
+        final list = _decode(await _client.get(_uri('/api/points/redemptions'), headers: _auth)) as List;
+        return [for (final r in list) Map<String, dynamic>.from(r as Map)];
+      });
+
+  Future<void> updateRedemption(int id, String status, String? note) =>
+      _json('PATCH', '/api/points/redemptions/$id', {'status': status, 'admin_note': note});
+
+  Future<void> addCampaignParticipant(int campaignId, String username) =>
+      _json('POST', '/api/campaigns/$campaignId/participants', {'username': username});
 
   // ---------- الحملات ----------
   Future<void> loadCampaigns() async {

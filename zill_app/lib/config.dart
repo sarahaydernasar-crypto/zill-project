@@ -8,6 +8,8 @@ class AppConfig {
   static const String _apiBaseOverride = String.fromEnvironment('API_BASE');
 
   static String get apiBase {
+    // الويب المقدَّم من الخادم نفسه يتصل بالعنوان الذي فُتح منه
+    if (_apiBaseOverride == 'same-origin') return Uri.base.origin;
     if (_apiBaseOverride.isNotEmpty) return _apiBaseOverride;
     // محاكي أندرويد يصل إلى جهاز الحاسوب عبر 10.0.2.2
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {

@@ -10,6 +10,10 @@ if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL غير موجود. أنشئ ملف .env بالاعتماد على .env.example")
 
 # إنشاء محرك الاتصال بقاعدة بيانات PostgreSQL (Neon) مع إعدادات الأمان
+# الروابط التي تعطيها Neon تبدأ بـ postgresql://، ومشغّل المشروع هو psycopg 3
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,

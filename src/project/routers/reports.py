@@ -6,9 +6,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from project.auth import require_admin
+from project.auth import optional_user, require_admin
 from project.database import get_db
-from project.models import UserReportDB
+from project.models import User, UserReportDB
+from project.points import REPORT_POINTS, award
+from project.rate_limit import rate_limit
 from project.uploads import save_photo
 
 router = APIRouter(prefix="/api/reports", tags=["Community Reports"])
@@ -37,20 +39,22 @@ def _public(r: UserReportDB) -> dict:
     }
 
 
-@router.post("/", status_code=201)
+@router.post("/", status_code=201, dependencies=[Depends(rate_limit(10, 3600))])
 async def submit_report(
     report_type: ReportType = Form(...),
     area_name: str = Form(..., min_length=1, max_length=200),
     description: str = Form(..., min_length=3, max_length=2000),
     photo: Optional[UploadFile] = File(None),
+    user: Optional[User] = Depends(optional_user),
     db: Session = Depends(get_db),
 ):
     report = UserReportDB(
+        username=user.username if user else None,
         tracking_code=_new_code(),
         report_type=report_type,
         area_name=area_name,
         report_text=description,
-        photo=await save_photo(photo) if photo is not None else None,
+        photo=await save_photo(photo, db) if photo is not None else None,
         status="new",
     )
     db.add(report)
@@ -90,5 +94,9 @@ def update_report(
     report.status = data.status
     report.admin_note = data.admin_note
     report.updated_at = datetime.utcnow()
+    if data.status == "resolved" and report.username:
+        reporter = db.query(User).filter(User.username == report.username).first()
+        if reporter is not None:
+            award(db, reporter.id, REPORT_POINTS, "بلاغ معتمد", f"report:{report.id}")
     db.commit()
     return _public(report)

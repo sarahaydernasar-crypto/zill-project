@@ -109,6 +109,11 @@ class _CampaignCard extends StatelessWidget {
             ),
             if (community.isAdmin) ...[
               OutlinedButton(onPressed: () => showCampaignForm(context, campaign: c), child: const Text('تعديل')),
+              OutlinedButton.icon(
+                onPressed: () => _addParticipant(context),
+                icon: const Icon(Icons.person_add_alt_outlined, size: 18),
+                label: const Text('إضافة مشارك'),
+              ),
               for (final (kind, label) in const [('before', 'صورة قبل'), ('after', 'صورة بعد')])
                 OutlinedButton.icon(
                   onPressed: () => _uploadPhoto(context, kind),
@@ -125,6 +130,35 @@ class _CampaignCard extends StatelessWidget {
         ]),
       ),
     );
+  }
+
+  /// يمنح مستخدماً حضر الحملة نقاط المشاركة
+  Future<void> _addParticipant(BuildContext context) async {
+    final community = CommunityScope.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final input = TextEditingController();
+    final username = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إضافة مشارك في الحملة'),
+        content: TextField(
+          controller: input,
+          decoration: const InputDecoration(labelText: 'اسم المستخدم كما في حسابه'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, input.text.trim()), child: const Text('إضافة')),
+        ],
+      ),
+    );
+    input.dispose();
+    if (username == null || username.isEmpty) return;
+    try {
+      await community.addCampaignParticipant(c.id, username);
+      messenger.showSnackBar(SnackBar(content: Text('تم تسجيل مشاركة $username.')));
+    } on ApiError catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _uploadPhoto(BuildContext context, String kind) async {

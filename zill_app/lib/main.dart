@@ -11,21 +11,25 @@ import 'screens/recommendations_screen.dart';
 import 'screens/reports_screen.dart';
 import 'services/areas_store.dart';
 import 'services/community_store.dart';
+import 'services/green_store.dart';
 import 'theme.dart';
 import 'widgets/admin_login.dart';
 import 'widgets/assistant_sheet.dart';
 import 'widgets/ghars_logo.dart';
+import 'widgets/tree_widgets.dart';
 
 void main() {
   final store = AreasStore()..load();
   final community = CommunityStore()..loadCampaigns();
-  runApp(ZillApp(store: store, community: community));
+  final green = GreenStore()..loadPublic();
+  runApp(ZillApp(store: store, community: community, green: green));
 }
 
 class ZillApp extends StatelessWidget {
-  const ZillApp({super.key, required this.store, required this.community});
+  const ZillApp({super.key, required this.store, required this.community, required this.green});
   final AreasStore store;
   final CommunityStore community;
+  final GreenStore green;
 
   @override
   Widget build(BuildContext context) {
@@ -34,20 +38,23 @@ class ZillApp extends StatelessWidget {
       store: store,
       child: CommunityScope(
         store: community,
-        child: MaterialApp(
-          title: 'ظِلّ',
-          debugShowCheckedModeBanner: false,
-          theme: theme.copyWith(
-            textTheme: GoogleFonts.tajawalTextTheme(theme.textTheme),
+        child: GreenScope(
+          store: green,
+          child: MaterialApp(
+            title: 'ظِلّ',
+            debugShowCheckedModeBanner: false,
+            theme: theme.copyWith(
+              textTheme: GoogleFonts.tajawalTextTheme(theme.textTheme),
+            ),
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar')],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: const ZillShell(),
           ),
-          locale: const Locale('ar'),
-          supportedLocales: const [Locale('ar')],
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          home: const ZillShell(),
         ),
       ),
     );
@@ -138,20 +145,33 @@ class _ZillShellState extends State<ZillShell> {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 64,
+        titleSpacing: 4, // حتى يبقى اسم ظِلّ ظاهراً بجانب الأيقونات على الهواتف
         title: const Text(
           'ظِلّ',
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
         ),
         actions: [
           TextButton.icon(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => Scaffold(
-                  appBar: AppBar(title: const Text('النقاط الخضراء')),
-                  body: const GreenPointsScreen(),
+            onPressed: () {
+              final green = GreenScope.of(context)..refresh();
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(
+                      title: const Text('النقاط الخضراء'),
+                      actions: [
+                        IconButton(
+                          tooltip: 'تحديث',
+                          onPressed: green.refresh,
+                          icon: const Icon(Icons.refresh),
+                        ),
+                      ],
+                    ),
+                    body: const GreenPointsScreen(),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
             style: TextButton.styleFrom(foregroundColor: Colors.white),
             icon: const Icon(Icons.eco),
             label: const Text('النقاط الخضراء'),
@@ -161,6 +181,7 @@ class _ZillShellState extends State<ZillShell> {
             onPressed: () {
               AreasScope.of(context).load();
               CommunityScope.of(context).loadCampaigns();
+              GreenScope.of(context).refresh();
             },
             icon: const Icon(Icons.refresh),
           ),
@@ -176,6 +197,7 @@ class _ZillShellState extends State<ZillShell> {
             ),
             icon: const Icon(Icons.info_outline),
           ),
+          const AccountButton(),
           const AdminButton(),
         ],
       ),

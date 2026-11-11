@@ -155,6 +155,12 @@ class CoverageLegend extends StatelessWidget {
             SizedBox(width: 4),
             Text('حملة منفذة', style: TextStyle(fontSize: 12)),
           ]),
+          const SizedBox(height: 2),
+          const Row(children: [
+            Icon(Icons.park, size: 16, color: ZillColors.green),
+            SizedBox(width: 4),
+            Text('شجرة مسجلة', style: TextStyle(fontSize: 12)),
+          ]),
         ],
       ),
     );
